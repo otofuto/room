@@ -103,7 +103,9 @@ async function detectFaces() {
                 extractFaceDescriptors(video, detections, now);
             }
             
+            // 修正：顔検出中は常に音声認識が動作するようにチェック
             if (!voiceTestMode && !isVoiceRecognitionActive) {
+                console.log('音声認識再開を試行');
                 startVoiceRecognitionForFace();
             }
             

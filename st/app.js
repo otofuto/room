@@ -48,16 +48,16 @@ const exitReasonSounds = {
 const voiceResponseMap = {
     "「侵入者発見！侵入者発見！」.mp3": ["不審", "侵入", "誰", "知らない", "不正", "エラー"],
     "「ありがと！」.mp3": ["ありがと", "あざす", "サンクス", "thx"],
-    "「ありがとうございます」.mp3": ["ありがとう", "どうも", "感謝", "サンキュー"],
+    "「ありがとうございます」.mp3": ["ありがとう", "どうも", "感謝", "サンキュー", "やるじゃん", "やるやん"],
     "「あれれ、もう終わっちゃうの？」.mp3": ["早い", "短い", "早退", "終わり"],
-    "「えへへ…」.mp3": ["かわいい", "すごい", "いいね", "上手"],
+    "「えへへ…」.mp3": ["かわいい", "可愛い", "すごい", "いいね", "上手", "すげえな"],
     "「おやすみなさい」.mp3": ["おやすみ", "今日"],
     "「お疲れ様です」.mp3": ["疲れ", "おつ", "お疲れ"],
     "「ごめんねっ」.mp3": ["ごめん", "すいません", "遅刻", "遅れ", "申し訳"],
     "「しつこいなあ」.mp3": ["しつこい", "何度", "また"],
     "「はい」.mp3": ["おい", "お前", "なあ", "うるせえ", "黙れ"],
     "「バイバーイ」.mp3": ["バイバイ", "ばいばい", "bye", "またね"],
-    "「また明日」.mp3": ["さよなら", "帰る", "失礼", "退社", "お先"],
+    "「また明日」.mp3": ["さよなら", "帰る", "失礼します", "退社", "お先"],
     "「やったね！」.mp3": ["やった", "よし", "成功", "できた", "完了", "終わった"],
     "「呼びました？」.mp3": ["すみません", "あの", "ちょっと", "おーい", "ねえ"],
     "konnichiwa.mp3": ["こんにちは", "やっほー", "うっす"],
@@ -143,7 +143,6 @@ function initializeVoiceRecognition() {
 
 function startVoiceTest() {
     voiceTestMode = true;
-    showStatus('音声認識テスト中です。何か話しかけてください', 'enter');
     
     if (!recognition || isVoiceRecognitionActive) return;
     
@@ -187,9 +186,17 @@ function startVoiceRecognition() {
 }
 
 function startVoiceRecognitionForFace() {
-    if (!recognition || isVoiceRecognitionActive) return;
+    if (!recognition) {
+        console.log('音声認識未初期化');
+        return;
+    }
+    if (isVoiceRecognitionActive) {
+        console.log('音声認識既に動作中');
+        return;
+    }
     
     try {
+        console.log('音声認識開始');
         recognition.start();
         isVoiceRecognitionActive = true;
         updateMicIndicator(true);
@@ -201,6 +208,8 @@ function startVoiceRecognitionForFace() {
         
     } catch (e) {
         console.log('音声認識開始エラー:', e);
+        isVoiceRecognitionActive = false;
+        updateMicIndicator(false);
     }
 }
 
