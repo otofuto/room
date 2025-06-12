@@ -444,3 +444,23 @@ h3 {
     font-size: 18px;
     font-weight: 600;
 }
+
+.employee-name-display {
+    text-align: center;
+    margin-bottom: 16px;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.face-name-label {
+    background: #22c55e;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    display: inline-block;
+}

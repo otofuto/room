@@ -101,12 +101,11 @@ async function detectFaces() {
                 console.log('顔検出: こんにちは音声再生');
                 
                 extractFaceDescriptors(video, detections, now);
-            }
-            
-            // 修正：顔検出中は常に音声認識が動作するようにチェック
-            if (!voiceTestMode && !isVoiceRecognitionActive) {
-                console.log('音声認識再開を試行');
-                startVoiceRecognitionForFace();
+                
+                if (!voiceTestMode && !isVoiceRecognitionActive) {
+                    console.log('音声認識開始を試行');
+                    startVoiceRecognitionForFace();
+                }
             }
             
             lastFaceDetectionTime = now;
@@ -198,7 +197,7 @@ function processFaceDescriptors(detectionsWithDescriptors, timestamp) {
         const matchedEmployee = findMatchingEmployee(descriptor);
         
         if (matchedEmployee) {
-            displayEmployeeName(matchedEmployee.name, box, index);
+            displayEmployeeName(matchedEmployee.name, index);
         } else {
             intruderDetected = true;
         }
@@ -224,30 +223,18 @@ function findMatchingEmployee(descriptor) {
     return null;
 }
 
-function displayEmployeeName(employeeName, box, index) {
-    const cameraContainer = document.querySelector('.camera-container');
-    const existingLabel = cameraContainer.querySelector(`.face-name-label-${index}`);
+function displayEmployeeName(employeeName, index) {
+    const nameDisplay = document.getElementById('employee-name-display');
     
-    if (existingLabel) {
-        existingLabel.remove();
-    }
+    // 既存のラベルをクリア
+    nameDisplay.innerHTML = '';
     
+    // 新しいラベルを作成
     const label = document.createElement('div');
-    label.className = `face-name-label-${index}`;
-    label.style.position = 'absolute';
-    label.style.top = '-35px';
-    label.style.left = '10px';
-    label.style.background = '#22c55e';
-    label.style.color = 'white';
-    label.style.padding = '8px 12px';
-    label.style.borderRadius = '6px';
-    label.style.fontSize = '16px';
-    label.style.fontWeight = 'bold';
-    label.style.zIndex = '30';
-    label.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
+    label.className = 'face-name-label';
     label.textContent = `${employeeName}さん`;
     
-    cameraContainer.appendChild(label);
+    nameDisplay.appendChild(label);
 }
 
 function drawFaceBoxes(video, detections) {
@@ -276,10 +263,11 @@ function drawFaceBoxes(video, detections) {
 function clearFaceOverlay() {
     const overlay = document.getElementById('face-overlay');
     overlay.innerHTML = '';
-    
-    const cameraContainer = document.querySelector('.camera-container');
-    const nameLabels = cameraContainer.querySelectorAll('[class*="face-name-label-"]');
-    nameLabels.forEach(label => label.remove());
+
+    const nameDisplay = document.getElementById('employee-name-display');
+    if (nameDisplay) {
+        nameDisplay.innerHTML = '';
+    }
 }
 
 function updateFaceStatus(status) {

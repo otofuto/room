@@ -111,22 +111,47 @@ function initializeVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
-    recognition.continuous = true;
+    recognition.continuous = false; // タブレット対応のため false に変更
     recognition.interimResults = false;
 
+    // タイムアウトを短くする
+    recognition.maxAlternatives = 1;
+    
     recognition.onresult = function(event) {
         const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
         console.log('音声認識結果:', transcript);
         checkVoiceResponse(transcript);
+        
+        // 結果取得後、再度音声認識を開始（顔が検出されている場合のみ）
+        if (faceDetected && !voiceTestMode) {
+            setTimeout(() => {
+                if (faceDetected && !isVoiceRecognitionActive) {
+                    startVoiceRecognitionForFace();
+                }
+            }, 1000);
+        }
     };
 
     recognition.onerror = function(event) {
         console.log('音声認識エラー:', event.error);
+        alert('Debug: Voice recognition error: ' + event.error);
+        updateMicIndicator(false);
+        isVoiceRecognitionActive = false;
+        
+        // エラー後、少し待ってから再開（顔が検出されている場合のみ）
+        if (faceDetected && !voiceTestMode) {
+            setTimeout(() => {
+                if (faceDetected && !isVoiceRecognitionActive) {
+                    startVoiceRecognitionForFace();
+                }
+            }, 2000);
+        }
     };
 
     recognition.onend = function() {
+        console.log('音声認識が終了しました');
         updateMicIndicator(false);
-        isVoiceRecognitionActive = false;
+        isVoiceRecognitionActive = false; // 確実にfalseにする
         
         if (faceDisappearTimer) {
             clearTimeout(faceDisappearTimer);
@@ -135,6 +160,15 @@ function initializeVoiceRecognition() {
         if (voiceRecognitionTimeout) {
             clearTimeout(voiceRecognitionTimeout);
             voiceRecognitionTimeout = null;
+        }
+        
+        // 少し待ってから再開（重複開始を防ぐため）
+        if (faceDetected && !voiceTestMode) {
+            setTimeout(() => {
+                if (faceDetected && !isVoiceRecognitionActive) {
+                    startVoiceRecognitionForFace();
+                }
+            }, 1000); // 1秒待つ
         }
     };
 
@@ -186,17 +220,15 @@ function startVoiceRecognition() {
 }
 
 function startVoiceRecognitionForFace() {
-    if (!recognition) {
-        console.log('音声認識未初期化');
-        return;
-    }
+    if (!recognition) return;
+    
+    // 既に開始されている場合は何もしない
     if (isVoiceRecognitionActive) {
-        console.log('音声認識既に動作中');
+        console.log('音声認識は既に開始されています');
         return;
     }
     
     try {
-        console.log('音声認識開始');
         recognition.start();
         isVoiceRecognitionActive = true;
         updateMicIndicator(true);
@@ -206,9 +238,11 @@ function startVoiceRecognitionForFace() {
             voiceRecognitionTimeout = null;
         }
         
+        console.log('音声認識を開始しました');
+        
     } catch (e) {
         console.log('音声認識開始エラー:', e);
-        isVoiceRecognitionActive = false;
+        isVoiceRecognitionActive = false; // エラー時はfalseに戻す
         updateMicIndicator(false);
     }
 }

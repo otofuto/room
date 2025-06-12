@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>入退室管理システム</title>
     <link rel="manifest" href="/st/manifest.json">
-    <link rel="stylesheet" href="/st/style.css">
+    <link rel="stylesheet" href="/st/style.css?3">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
@@ -38,6 +38,8 @@
         </div>
 
         <div id="scanner" class="screen active">
+            <div id="employee-name-display" class="employee-name-display"></div>
+    
             <div class="camera-container">
                 <div id="scanner-container">
                     <div class="face-detection-overlay" id="face-overlay"></div>
@@ -146,7 +148,7 @@
         </div>
     </div>
 
-    <script src="/st/app.js"></script>
-    <script src="/st/features.js"></script>
+    <script src="/st/app.js?3"></script>
+    <script src="/st/features.js?3"></script>
 </body>
 </html>
