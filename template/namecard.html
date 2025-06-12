@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社員証印刷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            padding: 10mm;
+        }
+
+        .namecard {
+            width: 91mm;
+            height: 55mm;
+            border: 0.5pt solid #666;
+            background: white;
+            padding: 3mm;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2mm;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .company-name {
+            color: black;
+        }
+
+        .card-title {
+            color: black;
+        }
+
+        .employee-info {
+            text-align: center;
+            margin: 3mm 0;
+            font-size: 11pt;
+            font-weight: bold;
+            color: black;
+        }
+
+        .barcode-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 2mm 0;
+        }
+
+        .barcode-image {
+            max-width: 80mm;
+            max-height: 20mm;
+            width: auto;
+            height: auto;
+        }
+
+        .error-message {
+            text-align: center;
+            color: #666;
+            font-size: 9pt;
+            padding: 20px;
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 10mm 0 0 10mm;
+            }
+            
+            .namecard {
+                page-break-inside: avoid;
+            }
+            
+            @page {
+                margin: 0;
+                size: A4;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="namecard" id="namecard">
+        <div class="header">
+            <div class="company-name">株式会社桜楓</div>
+            <div class="card-title">社員証</div>
+        </div>
+        
+        <div class="employee-info" id="employeeInfo">
+            データを読み込み中...
+        </div>
+        
+        <div class="barcode-container">
+            <img id="barcodeImage" class="barcode-image" style="display: none;" alt="バーコード">
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadEmployeeData();
+        });
+
+        function loadEmployeeData() {
+            try {
+                // sessionStorageからデータを取得
+                const data = sessionStorage.getItem('namecardData');
+                
+                if (!data) {
+                    showError('データが見つかりません');
+                    return;
+                }
+
+                const employeeData = JSON.parse(data);
+                
+                if (!employeeData.employeeId || !employeeData.employeeName) {
+                    showError('社員情報が不完全です');
+                    return;
+                }
+
+                // 社員情報を表示
+                const employeeInfo = document.getElementById('employeeInfo');
+                employeeInfo.textContent = `ID: ${employeeData.employeeId} ${employeeData.employeeName}`;
+
+                // document.titleを設定（PDFファイル名用）
+                document.title = `${employeeData.employeeName}の社員証`;
+
+                // バーコード画像を表示
+                if (employeeData.barcodeBase64) {
+                    const barcodeImage = document.getElementById('barcodeImage');
+                    barcodeImage.src = employeeData.barcodeBase64;
+                    barcodeImage.style.display = 'block';
+                    
+                    barcodeImage.onerror = function() {
+                        showError('バーコード画像の読み込みに失敗しました');
+                    };
+                } else {
+                    showError('バーコードデータがありません');
+                }
+
+            } catch (error) {
+                console.error('データ読み込みエラー:', error);
+                showError('データの読み込みに失敗しました');
+            }
+        }
+
+        function showError(message) {
+            const employeeInfo = document.getElementById('employeeInfo');
+            employeeInfo.innerHTML = `<div class="error-message">${message}</div>`;
+            
+            const barcodeImage = document.getElementById('barcodeImage');
+            barcodeImage.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

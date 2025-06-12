@@ -1,0 +1,15 @@
+{
+  "name": "入退室管理システム",
+  "short_name": "入退室管理",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4285f4",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgdmlld0JveD0iMCAwIDI0MCAyNDAiPjxyZWN0IHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiBmaWxsPSIjNDI4NWY0Ii8+PC9zdmc+",
+      "sizes": "240x240",
+      "type": "image/svg+xml"
+    }
+  ]
+}

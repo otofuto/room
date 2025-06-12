@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>入退室管理システム</title>
+    <link rel="manifest" href="/st/manifest.json">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+            color: #1a202c;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            background: white;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            color: #2563eb;
+            margin-bottom: 12px;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav-btn {
+            padding: 12px 24px;
+            border: 1px solid #2563eb;
+            background: white;
+            color: #2563eb;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .nav-btn:hover {
+            background: #eff6ff;
+        }
+        
+        .nav-btn.active {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .screen {
+            display: none;
+            background: white;
+            padding: 32px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 24px;
+            border: 2px solid #e2e8f0;
+            overflow: hidden;
+        }
+        
+        #scanner-container {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            position: relative;
+        }
+        
+        .face-detection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .face-box {
+            position: absolute;
+            border: 2px solid #22c55e;
+            border-radius: 4px;
+            background: rgba(34, 197, 94, 0.1);
+        }
+        
+        .status-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            text-align: center;
+            padding: 24px 32px;
+            font-size: 20px;
+            font-weight: 600;
+            animation: fadeIn 0.3s ease;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            min-width: 300px;
+            max-width: 500px;
+        }
+        
+        .status-enter {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .status-exit {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        
+        .exit-reason {
+            margin: 24px 0;
+            text-align: center;
+        }
+        
+        .reason-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .reason-btn {
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            color: #374151;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+        }
+        
+        .reason-btn:hover {
+            background: #eff6ff;
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+        
+        .reason-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .exit-reason input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            font-size: 16px;
+            margin-bottom: 16px;
+            transition: border-color 0.2s ease;
+        }
+        
+        .exit-reason input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+        
+        .exit-reason button {
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-weight: 500;
+        }
+        
+        .exit-reason button:hover {
+            background: #1d4ed8;
+        }
+        
+        .log-container {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        
+        .log-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .log-enter {
+            border-left: 4px solid #059669;
+        }
+        
+        .log-exit {
+            border-left: 4px solid #d97706;
+        }
+        
+        .log-avatar {
+            width: 40px;
+            height: 40px;
+            margin-right: 16px;
+            object-fit: cover;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .log-info {
+            flex: 1;
+        }
+        
+        .log-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #374151;
+        }
+        
+        .log-time {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        .log-reason {
+            color: #4b5563;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        .employee-form {
+            background: #f9fafb;
+            padding: 24px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            font-size: 16px;
+            transition: border-color 0.2s ease;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+        
+        .form-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+        
+        .btn-success {
+            background: #059669;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #047857;
+        }
+        
+        .btn-danger {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+        
+        .employee-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .employee-item {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 12px;
+            background: white;
+        }
+        
+        .employee-avatar {
+            width: 48px;
+            height: 48px;
+            margin-right: 16px;
+            object-fit: cover;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .employee-info {
+            flex: 1;
+        }
+        
+        .employee-info div {
+            margin-bottom: 4px;
+            color: #374151;
+        }
+        
+        .employee-info strong {
+            color: #1f2937;
+        }
+        
+        .employee-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .employee-actions .btn {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        
+        .face-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 20;
+        }
+        
+        .face-detected {
+            background: rgba(34, 197, 94, 0.8);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(-50%, -60%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .greeting {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        
+        h2 {
+            color: #1f2937;
+            margin-bottom: 24px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        h3 {
+            color: #374151;
+            margin-bottom: 16px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 音声許可オーバーレイ -->
+        <div id="audio-enable-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 32px; border: 1px solid #e2e8f0; text-align: center; max-width: 400px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);">
+                <h2 style="margin-bottom: 20px; color: #1f2937; font-weight: 600;">音声機能の有効化</h2>
+                <p style="margin-bottom: 24px; color: #6b7280; line-height: 1.6;">
+                    入退室時の音声フィードバックと顔検出機能を利用するために、<br>
+                    音声再生を許可してください。
+                </p>
+                <button onclick="enableAudio()" style="padding: 12px 24px; background: #2563eb; color: white; border: none; font-size: 16px; cursor: pointer; font-weight: 500;">
+                    音声再生を許可
+                </button>
+            </div>
+        </div>
+
+        <div class="header">
+            <h1>入退室管理システム</h1>
+            <div class="nav-buttons">
+                <button class="nav-btn active" onclick="showScreen('scanner', this)">スキャン</button>
+                <button class="nav-btn" onclick="showScreen('employees', this)">社員管理</button>
+                <button class="nav-btn" onclick="showScreen('logs', this)">ログ</button>
+            </div>
+        </div>
+
+        <!-- スキャン画面 -->
+        <div id="scanner" class="screen active">
+            <div class="camera-container">
+                <div id="scanner-container">
+                    <div class="face-detection-overlay" id="face-overlay"></div>
+                    <div class="face-status" id="face-status">顔検出: 待機中</div>
+                </div>
+            </div>
+            
+            <div id="status-message" class="status-message hidden"></div>
+            
+            <div id="exit-reason" class="exit-reason hidden">
+                <h3 style="margin-bottom: 20px; color: #374151;">退室理由を選択してください</h3>
+                <div class="reason-buttons">
+                    <button class="reason-btn" onclick="selectReason('帰宅')">帰宅</button>
+                    <button class="reason-btn" onclick="selectReason('買い物')">買い物</button>
+                    <button class="reason-btn" onclick="selectReason('社長案件')">社長案件</button>
+                    <button class="reason-btn" onclick="selectReason('営業')">営業</button>
+                    <button class="reason-btn" onclick="selectReason('休憩')">休憩</button>
+                    <button class="reason-btn" onclick="selectReason('永神業務')">永神業務</button>
+                    <button class="reason-btn" onclick="selectReason('出張')">出張</button>
+                    <button class="reason-btn" onclick="selectReason('早退')">早退</button>
+                </div>
+                <div style="margin-top: 20px;">
+                    <input type="text" id="exit-reason-input" placeholder="その他の理由を入力" style="width: 100%; max-width: 300px; padding: 12px 16px; border: 2px solid #e2e8f0; font-size: 16px; margin-bottom: 16px;">
+                    <br>
+                    <button class="btn btn-primary" onclick="submitCustomReason()">その他の理由で決定</button>
+                </div>
+            </div>
+            
+            <div class="log-container">
+                <h3>最近の入退室ログ</h3>
+                <div id="recent-logs"></div>
+            </div>
+        </div>
+
+        <!-- 社員管理画面 -->
+        <div id="employees" class="screen">
+            <h2>社員管理</h2>
+            
+            <div class="employee-form">
+                <h3 id="form-title">新規社員登録</h3>
+                <div class="form-group">
+                    <label>社員ID</label>
+                    <input type="number" id="employee-id" placeholder="例: 12345">
+                </div>
+                <div class="form-group">
+                    <label>名前</label>
+                    <input type="text" id="employee-name" placeholder="例: 田中太郎">
+                </div>
+                <div class="form-group">
+                    <label>顔写真URL</label>
+                    <input type="url" id="employee-photo" placeholder="https://example.com/photo.jpg">
+                </div>
+                <div class="form-buttons">
+                    <button class="btn btn-success" onclick="saveEmployee()">保存</button>
+                    <button class="btn btn-primary" onclick="resetForm()">リセット</button>
+                </div>
+            </div>
+            
+            <div class="employee-list" id="employee-list"></div>
+        </div>
+
+        <!-- ログ画面 -->
+        <div id="logs" class="screen">
+            <h2>入退室ログ（1週間分）</h2>
+            <div class="log-container">
+                <div id="all-logs"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let employees = JSON.parse(localStorage.getItem('employees') || '[]');
+        let entranceStatus = JSON.parse(localStorage.getItem('entranceStatus') || '{}');
+        let logs = JSON.parse(localStorage.getItem('logs') || '[]');
+        let currentEditingId = null;
+        let currentEmployee = null;
+        let lastScanTime = 0;
+        let isExitReasonMode = false;
+        let isQuaggaInitialized = false;
+        let audioEnabled = false;
+        let quaggaDetectionHandler = null;
+        let currentMediaStream = null;
+
+        // 顔検出関連の変数
+        let isFaceApiInitialized = false;
+        let faceDetectionInterval = null;
+        let faceDetected = false;
+        let lastFaceDetectionTime = 0;
+        let isFaceDetectionActive = false;
+
+        // HTMLエスケープ機能（XSS対策）
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // データ保存機能
+        function saveData() {
+            localStorage.setItem('employees', JSON.stringify(employees));
+            localStorage.setItem('entranceStatus', JSON.stringify(entranceStatus));
+            localStorage.setItem('logs', JSON.stringify(logs));
+        }
+
+        // 音声再生許可機能
+        function enableAudio() {
+            audioEnabled = true;
+            document.getElementById('audio-enable-overlay').classList.add('hidden');
+            
+            // テスト音再生
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGccCDWa3/LRfisEJZTZ9cKIVw0SXdTm9qA6CB1PJHzfwkgIwgZCYkXLKaWL1zlBjdmOOT0UXrDq8KhQEQZRz+Xu');
+                audio.volume = 0.1;
+                audio.play().catch(() => {});
+            } catch (e) {}
+            
+            // アプリ初期化
+            initializeApp();
+        }
+
+        // 音声ファイル再生機能
+        function playSound(type) {
+            if (!audioEnabled) return;
+            
+            let fileName;
+            
+            switch(type) {
+                case 'enter':
+                    fileName = 'enter.mp3';
+                    break;
+                case 'exit':
+                    fileName = 'exit.mp3';
+                    break;
+                case 'error':
+                    fileName = 'error.mp3';
+                    break;
+                case 'success':
+                    fileName = 'success.mp3';
+                    break;
+                case 'hello':
+                    fileName = getRandomGreetingSound();
+                    break;
+                default:
+                    return;
+            }
+            
+            try {
+                const audio = new Audio('/st/' + fileName);
+                audio.volume = 0.3;
+                audio.play().catch(e => {
+                    console.log('音声再生に失敗:', e);
+                });
+            } catch (e) {
+                console.log('音声ファイルが見つかりません:', fileName);
+            }
+        }
+
+        // ランダム挨拶音声選択機能
+        function getRandomGreetingSound() {
+            const random = Math.floor(Math.random() * 7);  // 0-6のランダム
+            
+            if (random >= 0 && random <= 3) {
+                // 0-3: 時間帯による挨拶
+                const hour = new Date().getHours();
+                if (hour < 11) {
+                    return 'ohayou.mp3';      // 朝
+                } else if (hour < 17) {
+                    return 'konnichiwa.mp3';  // 昼
+                } else {
+                    return 'konbanha.mp3';    // 夜
+                }
+            } else if (random === 4) {
+                return 'hi.mp3';
+            } else if (random === 5) {
+                return 'yahoo.mp3';
+            } else { // random === 6
+                return 'ya.mp3';
+            }
+        }
+
+        // Face-api.js初期化
+        async function initializeFaceApi() {
+            if (isFaceApiInitialized) return;
+            
+            try {
+                console.log('Face-api.js初期化開始...');
+                
+                // face-api.js@0.22.2と互換性のあるモデルパスを使用
+                await faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights');
+                
+                isFaceApiInitialized = true;
+                console.log('Face-api.js初期化完了');
+                
+                // 顔検出開始
+                startFaceDetection();
+                
+            } catch (error) {
+                console.error('Face-api.js初期化エラー:', error);
+                console.log('代替パスで再試行...');
+                
+                // 代替パス1: CDN経由
+                try {
+                    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights');
+                    isFaceApiInitialized = true;
+                    console.log('Face-api.js初期化完了（代替パス1）');
+                    startFaceDetection();
+                } catch (secondError) {
+                    console.error('代替パス1失敗:', secondError);
+                    
+                    // 代替パス2: jsDelivr経由
+                    try {
+                        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+                        isFaceApiInitialized = true;
+                        console.log('Face-api.js初期化完了（代替パス2）');
+                        startFaceDetection();
+                    } catch (thirdError) {
+                        console.error('Face-api.js初期化失敗（全パス）:', thirdError);
+                        updateFaceStatus('モデル読み込み失敗');
+                    }
+                }
+            }
+        }
+
+        // 顔検出開始
+        function startFaceDetection() {
+            if (!isFaceApiInitialized || faceDetectionInterval) return;
+            
+            isFaceDetectionActive = true;
+            updateFaceStatus('検出中...');
+            
+            faceDetectionInterval = setInterval(async () => {
+                await detectFaces();
+            }, 1000); // 1秒間隔
+        }
+
+        // 顔検出停止
+        function stopFaceDetection() {
+            isFaceDetectionActive = false;
+            if (faceDetectionInterval) {
+                clearInterval(faceDetectionInterval);
+                faceDetectionInterval = null;
+            }
+            updateFaceStatus('停止中');
+            clearFaceOverlay();
+        }
+
+        // 顔検出実行
+        async function detectFaces() {
+            if (!isFaceApiInitialized || !isFaceDetectionActive) return;
+            
+            try {
+                const video = document.querySelector('#scanner-container video');
+                if (!video || video.readyState !== 4) return;
+                
+                // 顔検出実行
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
+                    inputSize: 416,
+                    scoreThreshold: 0.5
+                }));
+                
+                const now = Date.now();
+                
+                if (detections.length > 0) {
+                    // 顔が検出された
+                    updateFaceStatus(`顔検出: ${detections.length}人`);
+                    drawFaceBoxes(video, detections);
+                    
+                    // 初回検出時のみ音声再生
+                    if (!faceDetected) {
+                        faceDetected = true;
+                        playSound('hello');
+                        console.log('顔検出: こんにちは音声再生');
+                    }
+                    
+                    lastFaceDetectionTime = now;
+                } else {
+                    // 顔が検出されなかった
+                    updateFaceStatus('顔検出: なし');
+                    clearFaceOverlay();
+                    
+                    // 1秒以上顔が検出されなかったらフラグをリセット
+                    if (faceDetected && now - lastFaceDetectionTime > 1000) {
+                        faceDetected = false;
+                        console.log('顔消失: フラグリセット');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('顔検出エラー:', error);
+                updateFaceStatus('検出エラー');
+            }
+        }
+
+        // 顔検出ボックス描画
+        function drawFaceBoxes(video, detections) {
+            const overlay = document.getElementById('face-overlay');
+            overlay.innerHTML = '';
+            
+            const videoRect = video.getBoundingClientRect();
+            const containerRect = video.parentElement.getBoundingClientRect();
+            
+            detections.forEach(detection => {
+                const box = detection.box;
+                const faceBox = document.createElement('div');
+                faceBox.className = 'face-box';
+                
+                // 座標をオーバーレイに合わせて調整
+                const scaleX = videoRect.width / video.videoWidth;
+                const scaleY = videoRect.height / video.videoHeight;
+                
+                faceBox.style.left = `${box.x * scaleX}px`;
+                faceBox.style.top = `${box.y * scaleY}px`;
+                faceBox.style.width = `${box.width * scaleX}px`;
+                faceBox.style.height = `${box.height * scaleY}px`;
+                
+                overlay.appendChild(faceBox);
+            });
+        }
+
+        // 顔検出オーバーレイクリア
+        function clearFaceOverlay() {
+            const overlay = document.getElementById('face-overlay');
+            overlay.innerHTML = '';
+        }
+
+        // 顔検出ステータス更新
+        function updateFaceStatus(status) {
+            const statusElement = document.getElementById('face-status');
+            statusElement.textContent = status;
+            statusElement.className = 'face-status' + (status.includes('検出: ') && !status.includes('なし') ? ' face-detected' : '');
+        }
+
+        // 初期化関数
+        function initializeApp() {
+            renderEmployeeList();
+            renderLogs();
+            initializeScanner();
+            // Face-api.js初期化は非同期で実行
+            initializeFaceApi();
+        }
+
+        // カメラ停止機能
+        function stopCamera() {
+            // 顔検出停止
+            stopFaceDetection();
+            
+            if (isQuaggaInitialized) {
+                try {
+                    if (quaggaDetectionHandler) {
+                        Quagga.offDetected(quaggaDetectionHandler);
+                        quaggaDetectionHandler = null;
+                    }
+                    Quagga.stop();
+                    isQuaggaInitialized = false;
+                } catch (e) {
+                    console.log('カメラ停止エラー:', e);
+                }
+            }
+            
+            // MediaStreamトラックを停止してカメラリソースを解放
+            if (currentMediaStream) {
+                try {
+                    currentMediaStream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                    currentMediaStream = null;
+                } catch (e) {
+                    console.log('MediaStream停止エラー:', e);
+                }
+            }
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // PWA用のservice worker登録
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('data:text/javascript;base64,c2VsZi5hZGRFdmVudExpc3RlbmVyKCdpbnN0YWxsJywgZXZlbnQgPT4geyBzZWxmLnNraXBXYWl0aW5nKCk7IH0pOyBzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2ZldGNoJywgZXZlbnQgPT4geyBldmVudC5yZXNwb25kV2l0aChmZXRjaChldmVudC5yZXF1ZXN0KSk7IH0pOw==');
+            }
+        });
+
+        // ページ離脱時にカメラリソースを確実に解放
+        window.addEventListener('beforeunload', function() {
+            stopCamera();
+        });
+
+        // ページが非表示になった時もカメラを停止
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopCamera();
+            }
+        });
+
+        function showScreen(screenName, buttonElement) {
+            // 現在のカメラを停止
+            stopCamera();
+            
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(screenName).classList.add('active');
+            buttonElement.classList.add('active');
+            
+            if (screenName === 'scanner') {
+                setTimeout(() => {
+                    initializeScanner();
+                    // Face-api.jsが初期化済みなら顔検出開始
+                    if (isFaceApiInitialized) {
+                        startFaceDetection();
+                    }
+                }, 100);
+            } else if (screenName === 'employees') {
+                renderEmployeeList();
+            } else if (screenName === 'logs') {
+                renderLogs();
+            }
+        }
+
+        function initializeScanner() {
+            if (isQuaggaInitialized) {
+                stopCamera();
+            }
+            
+            const scannerContainer = document.getElementById('scanner-container');
+            
+            // 既存のvideo要素のみを削除（オーバーレイ要素は保持）
+            const existingVideo = scannerContainer.querySelector('video');
+            const existingCanvas = scannerContainer.querySelector('canvas');
+            if (existingVideo) existingVideo.remove();
+            if (existingCanvas) existingCanvas.remove();
+            
+            // 既存のイベントハンドラーを削除
+            if (quaggaDetectionHandler) {
+                Quagga.offDetected(quaggaDetectionHandler);
+                quaggaDetectionHandler = null;
+            }
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: scannerContainer,
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "user"
+                    }
+                },
+                locator: {
+                    patchSize: "large",
+                    halfSample: false
+                },
+                numOfWorkers: 4,
+                frequency: 3,  // 30fps → 3fps に変更（リソース競合を90%削減）
+                decoder: {
+                    readers: ["code_128_reader", "code_39_reader"],
+                    debug: {
+                        drawBoundingBox: true,
+                        showFrequency: true,
+                        drawScanline: true,
+                        showPattern: true
+                    }
+                },
+                locate: true
+            }, function(err) {
+                if (err) {
+                    console.log(err);
+                    scannerContainer.innerHTML = '<p style="color: red; text-align: center; padding: 20px;">カメラを起動できませんでした<br><button onclick="initializeScanner()" style="margin-top: 10px; padding: 5px 15px;">再試行</button></p>';
+                    return;
+                }
+                Quagga.start();
+                isQuaggaInitialized = true;
+                
+                // MediaStreamを取得して保存（リソース管理用）
+                try {
+                    const video = scannerContainer.querySelector('video');
+                    if (video && video.srcObject) {
+                        currentMediaStream = video.srcObject;
+                    }
+                } catch (e) {
+                    console.log('MediaStream取得エラー:', e);
+                }
+                
+                // 新しいイベントハンドラーを登録
+                quaggaDetectionHandler = function(data) {
+                    const code = data.codeResult.code;
+                    const quality = data.codeResult.decodedCodes;
+                    console.log('バーコード検出:', code, '品質:', quality);
+                    
+                    // 品質チェック：複数回同じコードが検出された場合のみ処理
+                    if (!window.detectionBuffer) window.detectionBuffer = {};
+                    if (!window.detectionBuffer[code]) window.detectionBuffer[code] = 0;
+                    window.detectionBuffer[code]++;
+                    
+                    // 2回以上検出されたら確実と判断
+                    if (window.detectionBuffer[code] >= 2) {
+                        handleBarcodeScan(code);
+                        // バッファをクリア
+                        window.detectionBuffer = {};
+                    }
+                };
+                
+                Quagga.onDetected(quaggaDetectionHandler);
+            });
+        }
+
+        function handleBarcodeScan(code) {
+            const now = Date.now();
+
+            if (now - lastScanTime < 5000) {
+                return;
+            }
+            lastScanTime = now;
+            
+            // バーコード読み取り中は顔検出を一時停止
+            stopFaceDetection();
+            
+            // バーコードからIDを取得（シンプルに）
+            const employeeId = code.trim();
+            
+            // 社員情報を取得
+            const employee = employees.find(emp => emp.id === employeeId);
+            if (!employee) {
+                playSound('error');
+                showStatus(`社員ID「${employeeId}」が見つかりません`, 'error');
+                // 顔検出を再開
+                setTimeout(() => {
+                    if (isFaceApiInitialized && document.getElementById('scanner').classList.contains('active')) {
+                        startFaceDetection();
+                    }
+                }, 3000);
+                return;
+            }
+
+            currentEmployee = employee;
+            const currentStatus = entranceStatus[employeeId] || 'out';
+            const newStatus = currentStatus === 'in' ? 'out' : 'in';
+            
+            // 退室理由入力中の制御
+            if (isExitReasonMode) {
+                if (newStatus === 'out') {
+                    playSound('error');
+                    showStatus('退室理由を入力してください', 'error');
+                    // 顔検出を再開
+                    setTimeout(() => {
+                        if (isFaceApiInitialized && document.getElementById('scanner').classList.contains('active')) {
+                            startFaceDetection();
+                        }
+                    }, 3000);
+                    return;
+                }
+                // 入室は可能
+            }
+            
+            if (newStatus === 'in') {
+                // 入室処理
+                playSound('enter');
+                entranceStatus[employeeId] = 'in';
+                const greeting = getGreeting();
+                showStatus(`${greeting}<br>${escapeHtml(employee.name)}さんが入室しました`, 'enter');
+                addLog(employee, 'enter');
+                saveData();
+                
+                setTimeout(() => {
+                    hideStatus();
+                    // 顔検出を再開
+                    if (isFaceApiInitialized && document.getElementById('scanner').classList.contains('active')) {
+                        startFaceDetection();
+                    }
+                }, 3000);
+            } else {
+                // 退室処理 - 理由入力画面を表示
+                playSound('exit');
+                showExitReasonInput();
+            }
+        }
+
+        function showExitReasonInput() {
+            isExitReasonMode = true;
+            // 退室理由入力中は顔検出を停止
+            stopFaceDetection();
+            document.getElementById('exit-reason').classList.remove('hidden');
+            document.getElementById('exit-reason-input').focus();
+            // カメラ映像を非表示
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        // 理由選択機能
+        function selectReason(reason) {
+            if (currentEmployee) {
+                entranceStatus[currentEmployee.id] = 'out';
+                addLog(currentEmployee, 'exit', reason);
+                saveData();
+                
+                playSound('success');
+                showStatus(`${escapeHtml(currentEmployee.name)}さんが退室しました<br>理由: ${escapeHtml(reason)}`, 'exit');
+                document.getElementById('exit-reason').classList.add('hidden');
+                document.getElementById('exit-reason-input').value = '';
+                isExitReasonMode = false;
+                
+                // カメラ映像を再表示
+                document.getElementById('scanner-container').style.display = 'block';
+                
+                setTimeout(() => {
+                    hideStatus();
+                    // 顔検出を再開
+                    if (isFaceApiInitialized && document.getElementById('scanner').classList.contains('active')) {
+                        startFaceDetection();
+                    }
+                }, 3000);
+            }
+        }
+
+        function submitCustomReason() {
+            const reason = document.getElementById('exit-reason-input').value.trim();
+            
+            if (currentEmployee) {
+                entranceStatus[currentEmployee.id] = 'out';
+                addLog(currentEmployee, 'exit', reason || '');
+                saveData();
+                
+                playSound('success');
+                const reasonText = reason ? `<br>理由: ${escapeHtml(reason)}` : '';
+                showStatus(`${escapeHtml(currentEmployee.name)}さんが退室しました${reasonText}`, 'exit');
+                document.getElementById('exit-reason').classList.add('hidden');
+                document.getElementById('exit-reason-input').value = '';
+                isExitReasonMode = false;
+                
+                // カメラ映像を再表示
+                document.getElementById('scanner-container').style.display = 'block';
+                
+                setTimeout(() => {
+                    hideStatus();
+                    // 顔検出を再開
+                    if (isFaceApiInitialized && document.getElementById('scanner').classList.contains('active')) {
+                        startFaceDetection();
+                    }
+                }, 3000);
+            }
+        }
+
+        function getGreeting() {
+            const hour = new Date().getHours();
+            if (hour < 10) return 'おはようございます';
+            if (hour < 18) return 'お疲れ様です';
+            return 'お疲れ様でした';
+        }
+
+        function showStatus(message, type) {
+            const statusElement = document.getElementById('status-message');
+            statusElement.innerHTML = `<div class="greeting">${message}</div>`;
+            statusElement.className = `status-message status-${type}`;
+            statusElement.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            document.getElementById('status-message').classList.add('hidden');
+        }
+
+        function addLog(employee, action, reason = '') {
+            const log = {
+                id: Date.now(),
+                employeeId: employee.id,
+                employeeName: employee.name,
+                employeePhoto: employee.photo,
+                action: action,
+                reason: reason,
+                timestamp: new Date().toISOString()
+            };
+            
+            logs.unshift(log);
+            
+            // 1週間以上古いログを削除
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+            logs = logs.filter(log => new Date(log.timestamp) > oneWeekAgo);
+            
+            // リアルタイム更新
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const recentLogsContainer = document.getElementById('recent-logs');
+            const allLogsContainer = document.getElementById('all-logs');
+            
+            // 最近のログ（スキャン画面用）
+            const recentLogs = logs.slice(0, 5);
+            recentLogsContainer.innerHTML = recentLogs.map(log => createLogHTML(log)).join('');
+            
+            // 全ログ（ログ画面用）
+            if (allLogsContainer) {
+                allLogsContainer.innerHTML = logs.map(log => createLogHTML(log)).join('');
+            }
+        }
+
+        function createLogHTML(log) {
+            const date = new Date(log.timestamp);
+            const timeString = date.toLocaleString('ja-JP');
+            const actionText = log.action === 'enter' ? '入室' : '退室';
+            const actionClass = log.action === 'enter' ? 'log-enter' : 'log-exit';
+            
+            return `
+                <div class="log-item ${actionClass}">
+                    <img src="${escapeHtml(log.employeePhoto || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNERERERUUiLz4KPHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI4IiB5PSI4Ij4KPHBhdGggZD0iTTEyIDEyQzE0LjIwOTEgMTIgMTYgMTAuMjA5MSAxNiA4QzE2IDUuNzkwODYgMTQuMjA5MSA0IDEyIDRDOS43OTA4NiA0IDggNS43OTA4NiA4IDhDOCAxMC4yMDkxIDkuNzkwODYgMTIgMTIgMTJaIiBmaWxsPSIjOTk5OTk5Ii8+CjxwYXRoIGQ9Ik0xMiAxNEM5LjMzIDE0IDQgMTUuMzQgNCAyMFYyMkgxNkgyMFYyMEMyMCAxNS4zNCAxNC42NyAxNCAxMiAxNFoiIGZpbGw9IiM5OTk5OTkiLz4KPC9zdmc+Cjwvc3ZnPgo=')}" 
+                         alt="${escapeHtml(log.employeeName)}" class="log-avatar">
+                    <div class="log-info">
+                        <div class="log-name">${escapeHtml(log.employeeName)} - ${actionText}</div>
+                        <div class="log-time">${timeString}</div>
+                        ${log.reason ? `<div class="log-reason">理由: ${escapeHtml(log.reason)}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveEmployee() {
+            const id = document.getElementById('employee-id').value.trim();
+            const name = document.getElementById('employee-name').value.trim();
+            const photo = document.getElementById('employee-photo').value.trim();
+            
+            if (!id || !name) {
+                playSound('error');
+                alert('社員IDと名前は必須です');
+                return;
+            }
+            
+            // 編集モードかチェック
+            if (currentEditingId !== null) {
+                const index = employees.findIndex(emp => emp.id === currentEditingId);
+                if (index !== -1) {
+                    employees[index] = { id, name, photo };
+                }
+                currentEditingId = null;
+                document.getElementById('form-title').textContent = '新規社員登録';
+                playSound('success');
+            } else {
+                // 重複チェック（文字列で統一）
+                if (employees.some(emp => emp.id === id)) {
+                    playSound('error');
+                    alert('同じIDの社員が既に存在します');
+                    return;
+                }
+                employees.push({ id, name, photo });
+                playSound('success');
+            }
+            
+            resetForm();
+            renderEmployeeList();
+            saveData();
+        }
+
+        function generateBarcode(id, name) {
+            // バーコード生成は印刷機能で実行されるため、ここでは何もしない
+            console.log(`バーコード生成対象: ID=${id}, 名前=${name}`);
+        }
+
+        function resetForm() {
+            document.getElementById('employee-id').value = '';
+            document.getElementById('employee-name').value = '';
+            document.getElementById('employee-photo').value = '';
+            currentEditingId = null;
+            document.getElementById('form-title').textContent = '新規社員登録';
+        }
+
+        function editEmployee(id) {
+            const employee = employees.find(emp => emp.id === id);
+            if (employee) {
+                document.getElementById('employee-id').value = employee.id;
+                document.getElementById('employee-name').value = employee.name;
+                document.getElementById('employee-photo').value = employee.photo || '';
+                currentEditingId = id;
+                document.getElementById('form-title').textContent = '社員情報編集';
+            }
+        }
+
+        function deleteEmployee(id) {
+            if (confirm('この社員を削除しますか？')) {
+                employees = employees.filter(emp => emp.id !== id);
+                delete entranceStatus[id];
+                renderEmployeeList();
+                saveData();
+                playSound('success');
+            }
+        }
+
+        function renderEmployeeList() {
+            const container = document.getElementById('employee-list');
+            container.innerHTML = employees.map(employee => `
+                <div class="employee-item">
+                    <img src="${escapeHtml(employee.photo || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjUiIGN5PSIyNSIgcj0iMjUiIGZpbGw9IiNERERERUUiLz4KPHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSIxMCIgeT0iMTAiPgo8cGF0aCBkPSJNMTIgMTJDMTQuMjA5MSAxMiAxNiAxMC4yMDkxIDE2IDhDMTYgNS43OTA4NiAxNC4yMDkxIDQgMTIgNEM5Ljc5MDg2IDQgOCA1Ljc5MDg2IDggOEM4IDEwLjIwOTEgOS43OTA4NiAxMiAxMiAxMloiIGZpbGw9IiM5OTk5OTkiLz4KPHBhdGggZD0iTTEyIDE0QzkuMzMgMTQgNCAzNS4zNCA0IDIwVjIySDE2SDIwVjIwQzIwIDE1LjM0IDE0LjY3IDE0IDEyIDE0WiIgZmlsbD0iIzk5OTk5OSIvPgo8L3N2Zz4KPC9zdmc+Cg==')}" 
+                         alt="${escapeHtml(employee.name)}" class="employee-avatar">
+                    <div class="employee-info">
+                        <div><strong>ID:</strong> ${escapeHtml(employee.id)}</div>
+                        <div><strong>名前:</strong> ${escapeHtml(employee.name)}</div>
+                        <div><strong>ステータス:</strong> ${entranceStatus[employee.id] === 'in' ? '<span style="color: #059669;">在室</span>' : '<span style="color: #dc2626;">退室</span>'}</div>
+                    </div>
+                    <div class="employee-actions">
+                        <button class="btn btn-primary" onclick="editEmployee('${escapeHtml(employee.id)}')">編集</button>
+                        <button class="btn btn-danger" onclick="deleteEmployee('${escapeHtml(employee.id)}')">削除</button>
+                        <button class="btn btn-success" onclick="printEmployee('${escapeHtml(employee.id)}', '${escapeHtml(employee.name)}')">印刷</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 印刷機能
+        function printEmployee(employeeId, employeeName) {
+            // バーコード画像をBase64で生成
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 120;
+            
+            try {
+                // JsBarcodeでバーコードをcanvasに生成
+                JsBarcode(canvas, employeeId, {
+                    format: "CODE128",
+                    width: 2,
+                    height: 80,
+                    displayValue: true,
+                    background: "#ffffff",
+                    lineColor: "#000000",
+                    margin: 10
+                });
+                
+                // Base64エンコード
+                const barcodeBase64 = canvas.toDataURL('image/png');
+                
+                // sessionStorageに保存（namecard.htmlの形式に合わせる）
+                const namecardData = {
+                    employeeId: employeeId,
+                    employeeName: employeeName,
+                    barcodeBase64: barcodeBase64
+                };
+                sessionStorage.setItem('namecardData', JSON.stringify(namecardData));
+                
+                // iframe作成して印刷
+                let ifrm = document.createElement('iframe');
+                ifrm.id = 'printFrame';
+                ifrm.style.display = 'none';
+                document.body.appendChild(ifrm);
+                
+                ifrm.onload = () => {
+                    ifrm.contentWindow.addEventListener('afterprint', e => {
+                        ifrm.remove();
+                        // sessionStorageをクリア
+                        sessionStorage.removeItem('namecardData');
+                    });
+                    ifrm.contentWindow.print();
+                };
+                
+                ifrm.src = "/namecard.html";
+                
+            } catch (e) {
+                console.error('印刷用バーコード生成エラー:', e);
+                alert('印刷用バーコードの生成に失敗しました');
+            }
+        }
+
+    </script>
+</body>
+</html>
