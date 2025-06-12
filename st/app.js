@@ -26,6 +26,9 @@ let voiceRecognitionTimeout = null;
 let voiceTestMode = false;
 let faceDisappearTimer = null;
 
+let audio = null;
+let lastHelloSaid = 0;
+
 // 設定データ
 const exitReasonSounds = {
     "帰宅": {
@@ -50,11 +53,11 @@ const voiceResponseMap = {
     "「ありがと！」.mp3": ["ありがと", "あざす", "サンクス", "thx"],
     "「ありがとうございます」.mp3": ["ありがとう", "どうも", "感謝", "サンキュー", "やるじゃん", "やるやん"],
     "「あれれ、もう終わっちゃうの？」.mp3": ["早い", "短い", "早退", "終わり"],
-    "「えへへ…」.mp3": ["かわいい", "可愛い", "すごい", "いいね", "上手", "すげえな"],
+    "「えへへ…」.mp3": ["かわいい", "可愛い", "すごい", "いいね", "上手", "すげえな", "かっけえ"],
     "「おやすみなさい」.mp3": ["おやすみ", "今日"],
     "「お疲れ様です」.mp3": ["疲れ", "おつ", "お疲れ"],
     "「ごめんねっ」.mp3": ["ごめん", "すいません", "遅刻", "遅れ", "申し訳"],
-    "「しつこいなあ」.mp3": ["しつこい", "何度", "また"],
+    "「しつこいなあ」.mp3": ["しつこい", "何度"],
     "「はい」.mp3": ["おい", "お前", "なあ", "うるせえ", "黙れ"],
     "「バイバーイ」.mp3": ["バイバイ", "ばいばい", "bye", "またね"],
     "「また明日」.mp3": ["さよなら", "帰る", "失礼します", "退社", "お先"],
@@ -85,9 +88,11 @@ function enableAudioAndVoice() {
     document.getElementById('audio-enable-overlay').classList.add('hidden');
     
     try {
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGccCDWa3/LRfisEJZTZ9cKIVw0SXdTm9qA6CB1PJHzfwkgIwgZCYkXLKaWL1zlBjdmOOT0UXrDq8KhQEQZRz+Xu');
+        if (audio) audio.pause();
+        audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvGccCDWa3/LRfisEJZTZ9cKIVw0SXdTm9qA6CB1PJHzfwkgIwgZCYkXLKaWL1zlBjdmOOT0UXrDq8KhQEQZRz+Xu');
         audio.volume = 0.1;
-        audio.play().catch(() => {});
+        audio.onended = () => {audio = null};
+        audio.play();
     } catch (e) {}
     
     initializeVoiceRecognition();
@@ -134,7 +139,6 @@ function initializeVoiceRecognition() {
 
     recognition.onerror = function(event) {
         console.log('音声認識エラー:', event.error);
-        alert('Debug: Voice recognition error: ' + event.error);
         updateMicIndicator(false);
         isVoiceRecognitionActive = false;
         
@@ -275,6 +279,23 @@ function updateMicIndicator(isActive) {
 
 // 音声再生機能
 function checkVoiceResponse(transcript) {
+    const reasons = [
+        "帰宅",
+        "買い物",
+        "社長案件",
+        "営業",
+        "休憩",
+        "永神業務",
+        "出張",
+        "早退"
+    ];
+
+    for (const reason of reasons) {
+        if (transcript.includes(reason)) {
+            document.querySelector(`button[onclick="selectReason('${reason}')]`).click();
+            break;
+        }
+    }
     for (const [audioFile, keywords] of Object.entries(voiceResponseMap)) {
         if (keywords.some(keyword => transcript.includes(keyword))) {
             playVoiceResponse(audioFile);
@@ -287,8 +308,10 @@ function playVoiceResponse(fileName) {
     if (!audioEnabled) return;
     
     try {
-        const audio = new Audio('/st/' + fileName);
+        if (audio) audio.pause();
+        audio = new Audio('/st/' + fileName);
         audio.volume = 0.3;
+        audio.onended = () => {audio = null};
         audio.play().catch(e => {
             console.log('音声再生に失敗:', e);
         });
@@ -316,15 +339,20 @@ function playSound(type) {
             fileName = 'success.mp3';
             break;
         case 'hello':
-            fileName = getRandomGreetingSound();
+            if (new Date() - lastHelloSaid > 5000) {
+                fileName = getRandomGreetingSound();
+                lastHelloSaid = new Date() - 0;
+            }
             break;
         default:
             return;
     }
     
     try {
-        const audio = new Audio('/st/' + fileName);
+        if (audio) audio.pause();
+        audio = new Audio('/st/' + fileName);
         audio.volume = 0.3;
+        audio.onended = () => {audio = null};
         audio.play().catch(e => {
             console.log('音声再生に失敗:', e);
         });

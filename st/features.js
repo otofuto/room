@@ -215,7 +215,7 @@ function findMatchingEmployee(descriptor) {
             new Float32Array(descriptor), 
             new Float32Array(savedFace.descriptor)
         );
-        if (distance < 0.6) {
+        if (distance < 0.3) {
             const employee = employees.find(emp => emp.id === savedFace.employeeId);
             return employee;
         }
