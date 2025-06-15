@@ -210,17 +210,27 @@ function processFaceDescriptors(detectionsWithDescriptors, timestamp) {
 }
 
 function findMatchingEmployee(descriptor) {
+    let bestMatch = null;
+    let bestDistance = Infinity;
+    
+    // 全ての顔特徴データと照合し、最も距離が近い（類似度が高い）ものを選択
     for (const savedFace of faceDescriptors) {
         const distance = faceapi.euclideanDistance(
             new Float32Array(descriptor), 
             new Float32Array(savedFace.descriptor)
         );
-        if (distance < 0.3) {
+        
+        // 閾値0.3以下で、かつ今までの最小距離よりも小さい場合
+        if (distance < 0.3 && distance < bestDistance) {
+            bestDistance = distance;
             const employee = employees.find(emp => emp.id === savedFace.employeeId);
-            return employee;
+            if (employee) {
+                bestMatch = employee;
+            }
         }
     }
-    return null;
+    
+    return bestMatch;
 }
 
 function displayEmployeeName(employeeName, index) {
@@ -286,16 +296,25 @@ function associateFaceWithEmployee(employeeId, scanTime) {
             current.timestamp > latest.timestamp ? current : latest
         );
         
-        faceDescriptors = faceDescriptors.filter(saved => saved.employeeId !== employeeId);
-        
+        // 既存の特徴データを削除せず、新しいものを追加
         faceDescriptors.push({
             employeeId: employeeId,
             descriptor: latestFace.descriptor,
             timestamp: scanTime
         });
         
+        // 同一ユーザーの特徴データが多すぎる場合は古いものを削除（最大5個まで）
+        const userDescriptors = faceDescriptors.filter(face => face.employeeId === employeeId);
+        if (userDescriptors.length > 5) {
+            userDescriptors.sort((a, b) => a.timestamp - b.timestamp);
+            const oldestDescriptor = userDescriptors[0];
+            faceDescriptors = faceDescriptors.filter(face => 
+                !(face.employeeId === employeeId && face.timestamp === oldestDescriptor.timestamp)
+            );
+        }
+        
         saveData();
-        console.log(`社員ID:${employeeId}の顔特徴を保存しました`);
+        console.log(`社員ID:${employeeId}の顔特徴を保存しました（現在${faceDescriptors.filter(f => f.employeeId === employeeId).length}個）`);
     } else {
         console.log('10秒以内の顔特徴が見つかりませんでした');
     }
@@ -725,6 +744,7 @@ function renderEmployeeList() {
                 <button class="btn btn-primary" onclick="editEmployee('${escapeHtml(employee.id)}')">編集</button>
                 <button class="btn btn-danger" onclick="deleteEmployee('${escapeHtml(employee.id)}')">削除</button>
                 <button class="btn btn-success" onclick="printEmployee('${escapeHtml(employee.id)}', '${escapeHtml(employee.name)}')">印刷</button>
+                <button class="btn btn-info" onclick="downloadBarcode('${escapeHtml(employee.id)}')">バーコード</button>
             </div>
         </div>
     `).join('');
@@ -885,5 +905,39 @@ function resetAllData() {
     } catch (error) {
         console.error('データ削除エラー:', error);
         document.getElementById('reset-status').textContent = 'データ削除に失敗しました';
+    }
+}
+
+function downloadBarcode(employeeId) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 500;
+    canvas.height = 150;
+    
+    try {
+        JsBarcode(canvas, employeeId, {
+            format: "CODE128",
+            width: 3,
+            height: 100,
+            displayValue: true,
+            background: "#ffffff",
+            lineColor: "#000000",
+            margin: 20,
+            fontSize: 20
+        });
+        
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${employeeId}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 'image/png');
+        
+    } catch (e) {
+        console.error('バーコード生成エラー:', e);
+        alert('バーコードの生成に失敗しました');
     }
 }

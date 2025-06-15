@@ -337,6 +337,15 @@ body {
     background: #b91c1c;
 }
 
+.btn-info {
+    background: #0369a1;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #0284c7;
+}
+
 .employee-list {
     max-height: 500px;
     overflow-y: auto;
