@@ -1,46 +1,43 @@
-// 顔認識機能
+// 顔認識機能（MediaPipe Face Detection）
+let faceDetector = null;
+
 async function initializeFaceApi() {
     if (isFaceApiInitialized) return;
     
     try {
-        console.log('Face-api.js初期化開始...');
+        console.log('MediaPipe Face Detection初期化開始...');
         
-        await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'),
-            faceapi.nets.faceRecognitionNet.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights')
-        ]);
+        // MediaPipeの読み込み待機
+        let retries = 0;
+        while ((!window.FilesetResolver || !window.FaceDetector) && retries < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+        }
+        
+        if (!window.FilesetResolver || !window.FaceDetector) {
+            throw new Error('MediaPipe libraries not loaded');
+        }
+        
+        const vision = await window.FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+        );
+        
+        faceDetector = await window.FaceDetector.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
+            },
+            runningMode: "VIDEO",
+            minDetectionConfidence: 0.7,
+            minSuppressionThreshold: 0.3
+        });
         
         isFaceApiInitialized = true;
-        console.log('Face-api.js初期化完了');
+        console.log('MediaPipe Face Detection初期化完了');
         startFaceDetection();
+        
     } catch (error) {
-        console.error('Face-api.js初期化エラー:', error);
-        try {
-            await Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
-                faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights'),
-                faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights')
-            ]);
-            isFaceApiInitialized = true;
-            console.log('Face-api.js初期化完了（代替パス1）');
-            startFaceDetection();
-        } catch (secondError) {
-            console.error('代替パス1失敗:', secondError);
-            try {
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights'),
-                    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights'),
-                    faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights')
-                ]);
-                isFaceApiInitialized = true;
-                console.log('Face-api.js初期化完了（代替パス2）');
-                startFaceDetection();
-            } catch (thirdError) {
-                console.error('Face-api.js初期化失敗（全パス）:', thirdError);
-                updateFaceStatus('モデル読み込み失敗');
-            }
-        }
+        console.error('MediaPipe初期化エラー:', error);
+        updateFaceStatus('モデル読み込み失敗');
     }
 }
 
@@ -72,17 +69,14 @@ function stopFaceDetection() {
 }
 
 async function detectFaces() {
-    if (!isFaceApiInitialized || !isFaceDetectionActive) return;
+    if (!isFaceApiInitialized || !faceDetector || !isFaceDetectionActive) return;
     
     try {
         const video = document.querySelector('#scanner-container video');
         if (!video || video.readyState !== 4) return;
         
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
-            inputSize: 416,
-            scoreThreshold: 0.5
-        }));
-        
+        const result = faceDetector.detectForVideo(video, performance.now());
+        const detections = result.detections || [];
         const now = Date.now();
         
         if (detections.length > 0) {
@@ -139,38 +133,87 @@ async function extractFaceDescriptors(video, detections, timestamp) {
     
     try {
         const detectionsWithDescriptors = await Promise.all(
-            detections.map(async (detection) => {
-                try {
-                    const landmarks = await faceapi.detectFaceLandmarks(video, detection);
-                    if (!landmarks) {
-                        console.warn('ランドマーク検出に失敗');
-                        return null;
+            detections.map(async detection => {
+                const box = detection.boundingBox;
+                const keypoints = detection.keypoints || [];
+                
+                // Canvas上の顔領域を抽出して画像特徴を生成
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 128;
+                canvas.height = 128;
+                
+                // 顔領域をキャンバスに描画
+                const faceX = box.originX * video.videoWidth;
+                const faceY = box.originY * video.videoHeight;
+                const faceW = box.width * video.videoWidth;
+                const faceH = box.height * video.videoHeight;
+                
+                ctx.drawImage(video, faceX, faceY, faceW, faceH, 0, 0, 128, 128);
+                
+                // 画像データから特徴ベクトルを生成
+                const imageData = ctx.getImageData(0, 0, 128, 128);
+                const pixels = imageData.data;
+                const descriptor = [];
+                
+                // 画像を8x8のブロックに分割してヒストグラム特徴を計算
+                for (let blockY = 0; blockY < 8; blockY++) {
+                    for (let blockX = 0; blockX < 8; blockX++) {
+                        let rSum = 0, gSum = 0, bSum = 0;
+                        const blockSize = 16; // 128/8
+                        
+                        for (let y = 0; y < blockSize; y++) {
+                            for (let x = 0; x < blockSize; x++) {
+                                const pixelX = blockX * blockSize + x;
+                                const pixelY = blockY * blockSize + y;
+                                const idx = (pixelY * 128 + pixelX) * 4;
+                                
+                                rSum += pixels[idx];
+                                gSum += pixels[idx + 1];
+                                bSum += pixels[idx + 2];
+                            }
+                        }
+                        
+                        const pixelCount = blockSize * blockSize;
+                        descriptor.push(
+                            rSum / pixelCount / 255,
+                            gSum / pixelCount / 255,
+                            bSum / pixelCount / 255
+                        );
                     }
-                    
-                    const descriptor = await faceapi.computeFaceDescriptor(video, landmarks);
-                    if (!descriptor) {
-                        console.warn('特徴量抽出に失敗');
-                        return null;
-                    }
-                    
-                    return {
-                        detection: detection,
-                        descriptor: descriptor
-                    };
-                } catch (error) {
-                    console.error('個別の顔特徴抽出エラー:', error);
-                    return null;
                 }
+                
+                // キーポイント情報を追加（より重要な特徴）
+                keypoints.forEach((kp, i) => {
+                    if (i < 6) { // 主要な6ポイントのみ
+                        descriptor.push(kp.x || 0, kp.y || 0);
+                    }
+                });
+                
+                // 128次元に調整
+                while (descriptor.length < 128) {
+                    descriptor.push(0);
+                }
+                descriptor.length = 128;
+                
+                // 正規化
+                const norm = Math.sqrt(descriptor.reduce((sum, val) => sum + val * val, 0));
+                if (norm > 0) {
+                    for (let i = 0; i < descriptor.length; i++) {
+                        descriptor[i] /= norm;
+                    }
+                }
+                
+                return {
+                    detection: detection,
+                    descriptor: descriptor
+                };
             })
         );
         
-        const validDetections = detectionsWithDescriptors.filter(d => d !== null);
-        
-        if (validDetections.length > 0) {
+        if (detectionsWithDescriptors.length > 0) {
             faceDescriptorExtracted = true;
-            processFaceDescriptors(validDetections, timestamp);
-        } else {
-            console.warn('有効な顔特徴を抽出できませんでした');
+            processFaceDescriptors(detectionsWithDescriptors, timestamp);
         }
         
     } catch (error) {
@@ -186,7 +229,7 @@ function processFaceDescriptors(detectionsWithDescriptors, timestamp) {
     
     detectionsWithDescriptors.forEach((detection, index) => {
         const descriptor = detection.descriptor;
-        const box = detection.detection.box;
+        const box = detection.boundingBox;
         
         tempFaceDescriptors.push({
             descriptor: Array.from(descriptor),
@@ -215,13 +258,10 @@ function findMatchingEmployee(descriptor) {
     
     // 全ての顔特徴データと照合し、最も距離が近い（類似度が高い）ものを選択
     for (const savedFace of faceDescriptors) {
-        const distance = faceapi.euclideanDistance(
-            new Float32Array(descriptor), 
-            new Float32Array(savedFace.descriptor)
-        );
+        const distance = euclideanDistance(descriptor, savedFace.descriptor);
         
-        // 閾値0.3以下で、かつ今までの最小距離よりも小さい場合
-        if (distance < 0.3 && distance < bestDistance) {
+        // 精度向上のため閾値を厳格化（0.15に変更）
+        if (distance < 0.15 && distance < bestDistance) {
             bestDistance = distance;
             const employee = employees.find(emp => emp.id === savedFace.employeeId);
             if (employee) {
@@ -231,6 +271,18 @@ function findMatchingEmployee(descriptor) {
     }
     
     return bestMatch;
+}
+
+// ユークリッド距離の計算関数
+function euclideanDistance(a, b) {
+    if (a.length !== b.length) return Infinity;
+    
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) {
+        const diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return Math.sqrt(sum);
 }
 
 function displayEmployeeName(employeeName, index) {
@@ -252,19 +304,24 @@ function drawFaceBoxes(video, detections) {
     overlay.innerHTML = '';
     
     const videoRect = video.getBoundingClientRect();
+    const scaleX = videoRect.width / video.videoWidth;
+    const scaleY = videoRect.height / video.videoHeight;
     
     detections.forEach(detection => {
-        const box = detection.box;
+        const box = detection.boundingBox;
         const faceBox = document.createElement('div');
         faceBox.className = 'face-box';
         
-        const scaleX = videoRect.width / video.videoWidth;
-        const scaleY = videoRect.height / video.videoHeight;
+        // MediaPipeの座標は正規化済み(0-1)なので実際のピクセルに変換
+        const x = box.originX * video.videoWidth;
+        const y = box.originY * video.videoHeight;
+        const width = box.width * video.videoWidth;
+        const height = box.height * video.videoHeight;
         
-        faceBox.style.left = `${box.x * scaleX}px`;
-        faceBox.style.top = `${box.y * scaleY}px`;
-        faceBox.style.width = `${box.width * scaleX}px`;
-        faceBox.style.height = `${box.height * scaleY}px`;
+        faceBox.style.left = `${x * scaleX}px`;
+        faceBox.style.top = `${y * scaleY}px`;
+        faceBox.style.width = `${width * scaleX}px`;
+        faceBox.style.height = `${height * scaleY}px`;
         
         overlay.appendChild(faceBox);
     });
